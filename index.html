@@ -1,0 +1,947 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8"/>
+  <meta name="viewport" content="width=device-width,initial-scale=1.0"/>
+  <title>Auraplot · Dashboard</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,400;0,500;0,600;1,400;1,500&family=DM+Mono:wght@300;400&display=swap" rel="stylesheet">
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    :root {
+      --bg:           #ede6da;
+      --card:         #f7f2eb;
+      --card-deep:    #f0e9de;
+      --border:       #d9d0c3;
+      --border-light: #e5ddd1;
+      --text:         #1c1915;
+      --text-mid:     #897e72;
+      --text-light:   #b4a99d;
+      --gold:         #a8804a;
+      --gold-pale:    #c9a97a;
+      --long:         #2a5a3c;
+      --short:        #7a2e2e;
+      --profit:       #2a5a3c;
+      --loss:         #7a2e2e;
+      --long-bg:      #eaf1ec;
+      --short-bg:     #f1eaea;
+    }
+
+    html { scroll-behavior: smooth; }
+
+    body {
+      font-family: 'Cormorant Garamond', Georgia, serif;
+      background: var(--bg);
+      color: var(--text);
+      min-height: 100vh;
+      font-size: 15px;
+      line-height: 1.5;
+      -webkit-font-smoothing: antialiased;
+    }
+
+    /* Grain overlay — natural stone texture */
+    body::after {
+      content: '';
+      position: fixed;
+      inset: 0;
+      background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='250' height='250'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.8' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='250' height='250' filter='url(%23n)' opacity='0.055'/%3E%3C/svg%3E");
+      pointer-events: none;
+      z-index: 999;
+    }
+
+    /* ═══════════════════════════════════════════
+       HEADER
+    ═══════════════════════════════════════════ */
+    header {
+      position: sticky;
+      top: 0;
+      z-index: 100;
+      background: var(--bg);
+      border-bottom: 1px solid var(--border);
+      height: 60px;
+      padding: 0 52px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+    }
+
+    .wordmark {
+      font-size: 10px;
+      letter-spacing: 0.42em;
+      text-transform: uppercase;
+      color: var(--text);
+      font-weight: 500;
+    }
+
+    .header-meta {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 2px;
+    }
+
+    .header-symbol {
+      font-size: 11px;
+      letter-spacing: 0.24em;
+      text-transform: uppercase;
+      color: var(--text-mid);
+    }
+
+    .header-right {
+      display: flex;
+      align-items: center;
+      gap: 20px;
+    }
+
+    .refresh-status {
+      display: flex;
+      align-items: center;
+      gap: 7px;
+      font-family: 'DM Mono', monospace;
+      font-size: 10px;
+      color: var(--text-light);
+      letter-spacing: 0.06em;
+    }
+
+    .dot {
+      width: 5px;
+      height: 5px;
+      border-radius: 50%;
+      background: var(--gold);
+      flex-shrink: 0;
+    }
+
+    .dot.live    { animation: breathe 3s ease-in-out infinite; }
+    .dot.loading { animation: spin-dot 0.7s linear infinite; }
+    .dot.error   { background: var(--short); animation: none; }
+
+    @keyframes breathe {
+      0%,100% { opacity: 1; transform: scale(1); }
+      50%      { opacity: 0.35; transform: scale(0.8); }
+    }
+    @keyframes spin-dot {
+      to { transform: rotate(360deg); }
+    }
+
+    /* Mode toggle */
+    .toggle {
+      display: flex;
+      border: 1px solid var(--border);
+      border-radius: 2px;
+      overflow: hidden;
+    }
+    .toggle-btn {
+      padding: 5px 16px;
+      font-family: 'Cormorant Garamond', serif;
+      font-size: 9px;
+      letter-spacing: 0.28em;
+      text-transform: uppercase;
+      cursor: pointer;
+      border: none;
+      background: transparent;
+      color: var(--text-mid);
+      transition: background 0.18s, color 0.18s;
+    }
+    .toggle-btn.active {
+      background: var(--text);
+      color: var(--bg);
+    }
+    .toggle-divider {
+      width: 1px;
+      background: var(--border);
+      flex-shrink: 0;
+    }
+
+    /* ═══════════════════════════════════════════
+       MAIN LAYOUT
+    ═══════════════════════════════════════════ */
+    main {
+      max-width: 1160px;
+      margin: 0 auto;
+      padding: 44px 52px 88px;
+    }
+
+    /* Section label — small gold serif caps */
+    .label {
+      font-size: 9px;
+      letter-spacing: 0.32em;
+      text-transform: uppercase;
+      color: var(--gold);
+      font-weight: 500;
+    }
+
+    /* Thin hairline divider */
+    .rule { height: 1px; background: var(--border-light); }
+
+    /* ═══════════════════════════════════════════
+       ERROR BANNER
+    ═══════════════════════════════════════════ */
+    #errorBanner {
+      display: none;
+      border: 1px solid #e0c0c0;
+      background: #f8efef;
+      color: var(--short);
+      padding: 13px 24px;
+      font-size: 12px;
+      letter-spacing: 0.07em;
+      margin-bottom: 28px;
+    }
+    #errorBanner.show { display: block; }
+
+    /* ═══════════════════════════════════════════
+       METRICS STRIP (3 cols, seamless grid)
+    ═══════════════════════════════════════════ */
+    .metrics-grid {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 0;
+      border: 1px solid var(--border-light);
+      margin-bottom: 20px;
+    }
+    .metric-cell {
+      background: var(--card);
+      padding: 30px 36px 28px;
+      border-right: 1px solid var(--border-light);
+    }
+    .metric-cell:last-child { border-right: none; }
+
+    .metric-label {
+      display: block;
+      font-size: 9px;
+      letter-spacing: 0.3em;
+      text-transform: uppercase;
+      color: var(--text-mid);
+      margin-bottom: 14px;
+    }
+    .metric-value {
+      font-family: 'DM Mono', monospace;
+      font-size: 27px;
+      font-weight: 300;
+      letter-spacing: -0.01em;
+      line-height: 1;
+      color: var(--text);
+    }
+    .metric-sub {
+      font-family: 'DM Mono', monospace;
+      font-size: 10px;
+      color: var(--text-light);
+      margin-top: 8px;
+      letter-spacing: 0.06em;
+    }
+    .metric-value.profit { color: var(--profit); }
+    .metric-value.loss   { color: var(--loss);   }
+
+    /* ═══════════════════════════════════════════
+       POSITION CARD
+    ═══════════════════════════════════════════ */
+    .position-card {
+      background: var(--card);
+      border: 1px solid var(--border-light);
+      padding: 36px 44px 40px;
+      margin-bottom: 20px;
+    }
+
+    .position-top {
+      display: flex;
+      justify-content: space-between;
+      align-items: flex-start;
+      margin-top: 18px;
+    }
+
+    .pos-dir {
+      font-size: 36px;
+      font-weight: 600;
+      letter-spacing: 0.06em;
+      line-height: 1;
+    }
+    .pos-dir.long  { color: var(--long);  }
+    .pos-dir.short { color: var(--short); }
+
+    .pos-pnl-block { text-align: right; }
+    .pos-pnl-usdc {
+      font-family: 'DM Mono', monospace;
+      font-size: 34px;
+      font-weight: 300;
+      line-height: 1;
+    }
+    .pos-pnl-usdc.profit { color: var(--profit); }
+    .pos-pnl-usdc.loss   { color: var(--loss);   }
+    .pos-pnl-roi {
+      font-family: 'DM Mono', monospace;
+      font-size: 12px;
+      color: var(--text-mid);
+      margin-top: 7px;
+      letter-spacing: 0.05em;
+    }
+
+    .pos-grid {
+      display: grid;
+      grid-template-columns: repeat(4, 1fr);
+      gap: 0;
+      margin-top: 32px;
+    }
+    .pos-field {
+      padding: 20px 0;
+      border-top: 1px solid var(--border-light);
+    }
+    .pos-field + .pos-field { padding-left: 28px; border-left: 1px solid var(--border-light); }
+
+    .pos-field-label {
+      font-size: 9px;
+      letter-spacing: 0.28em;
+      text-transform: uppercase;
+      color: var(--text-mid);
+      display: block;
+      margin-bottom: 9px;
+    }
+    .pos-field-value {
+      font-family: 'DM Mono', monospace;
+      font-size: 15px;
+      color: var(--text);
+      letter-spacing: 0.02em;
+    }
+    .pos-field-value.danger { color: var(--short); }
+
+    .no-pos {
+      text-align: center;
+      padding: 56px 0 16px;
+      color: var(--text-light);
+      font-style: italic;
+      font-size: 15px;
+      letter-spacing: 0.1em;
+    }
+
+    /* ═══════════════════════════════════════════
+       PERFORMANCE ROW
+    ═══════════════════════════════════════════ */
+    .perf-grid {
+      display: grid;
+      grid-template-columns: repeat(4, 1fr);
+      gap: 0;
+      border: 1px solid var(--border-light);
+      margin-bottom: 20px;
+    }
+    .perf-cell {
+      background: var(--card);
+      padding: 26px 32px;
+      border-right: 1px solid var(--border-light);
+    }
+    .perf-cell:last-child { border-right: none; }
+
+    /* ═══════════════════════════════════════════
+       TABLES
+    ═══════════════════════════════════════════ */
+    .table-card {
+      background: var(--card);
+      border: 1px solid var(--border-light);
+      margin-bottom: 20px;
+      overflow: hidden;
+    }
+
+    .table-head {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      padding: 22px 36px 18px;
+      border-bottom: 1px solid var(--border-light);
+    }
+    .table-head-right {
+      font-family: 'DM Mono', monospace;
+      font-size: 10px;
+      color: var(--text-light);
+      letter-spacing: 0.08em;
+    }
+
+    table { width: 100%; border-collapse: collapse; }
+
+    th {
+      padding: 13px 28px;
+      text-align: left;
+      font-size: 9px;
+      letter-spacing: 0.26em;
+      text-transform: uppercase;
+      color: var(--text-mid);
+      font-weight: 400;
+      border-bottom: 1px solid var(--border-light);
+      background: var(--card-deep);
+      white-space: nowrap;
+    }
+    th:first-child { padding-left: 36px; }
+    th:last-child  { padding-right: 36px; }
+
+    td {
+      padding: 15px 28px;
+      font-family: 'DM Mono', monospace;
+      font-size: 12.5px;
+      color: var(--text);
+      border-bottom: 1px solid var(--border-light);
+      letter-spacing: 0.025em;
+      white-space: nowrap;
+    }
+    td:first-child { padding-left: 36px; }
+    td:last-child  { padding-right: 36px; }
+
+    tr:last-child td { border-bottom: none; }
+    tr:hover td { background: var(--card-deep); }
+
+    td.profit { color: var(--profit); }
+    td.loss   { color: var(--loss);   }
+
+    /* Badges */
+    .badge {
+      display: inline-block;
+      padding: 3px 9px;
+      font-size: 9px;
+      letter-spacing: 0.18em;
+      text-transform: uppercase;
+      border-radius: 1px;
+      font-family: 'Cormorant Garamond', serif;
+    }
+    .badge-buy, .badge-long {
+      background: var(--long-bg);
+      color: var(--long);
+    }
+    .badge-sell, .badge-short {
+      background: var(--short-bg);
+      color: var(--short);
+    }
+
+    /* Empty rows */
+    .empty-row td {
+      text-align: center;
+      padding: 48px 28px;
+      color: var(--text-light);
+      font-family: 'Cormorant Garamond', serif;
+      font-style: italic;
+      font-size: 14px;
+      letter-spacing: 0.1em;
+      border-bottom: none;
+    }
+
+    /* ═══════════════════════════════════════════
+       FOOTER
+    ═══════════════════════════════════════════ */
+    footer {
+      border-top: 1px solid var(--border);
+      margin-top: 20px;
+      padding: 28px 0 0;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
+    footer span {
+      font-size: 10px;
+      letter-spacing: 0.2em;
+      text-transform: uppercase;
+      color: var(--text-light);
+    }
+
+    /* ═══════════════════════════════════════════
+       UTILITIES
+    ═══════════════════════════════════════════ */
+    .mt-5  { margin-top: 5px;  }
+    .gap20 { margin-bottom: 20px; }
+  </style>
+</head>
+<body>
+
+<!-- ═══ HEADER ══════════════════════════════════════════ -->
+<header>
+  <span class="wordmark">Auraplot</span>
+
+  <div class="header-meta">
+    <span class="header-symbol">SOLUSDC &nbsp;·&nbsp; 20× Isolated</span>
+  </div>
+
+  <div class="header-right">
+    <div class="refresh-status">
+      <div class="dot live" id="statusDot"></div>
+      <span id="statusText">—</span>
+    </div>
+    <div class="toggle">
+      <button class="toggle-btn" id="btnTestnet" onclick="setMode('testnet')">Testnet</button>
+      <div class="toggle-divider"></div>
+      <button class="toggle-btn" id="btnLive" onclick="setMode('live')">Live</button>
+    </div>
+  </div>
+</header>
+
+<!-- ═══ MAIN ════════════════════════════════════════════ -->
+<main>
+
+  <div id="errorBanner"></div>
+
+  <!-- ── Metrics ─────────────────────────────────────── -->
+  <div class="metrics-grid">
+    <div class="metric-cell">
+      <span class="metric-label">Available Balance</span>
+      <div class="metric-value" id="mBalance">—</div>
+      <div class="metric-sub">USDC</div>
+    </div>
+    <div class="metric-cell">
+      <span class="metric-label">Unrealised P&L</span>
+      <div class="metric-value" id="mUnrealPnl">—</div>
+      <div class="metric-sub" id="mUnrealRoi">—</div>
+    </div>
+    <div class="metric-cell">
+      <span class="metric-label">Realised P&L · 7 Day</span>
+      <div class="metric-value" id="mRealPnl">—</div>
+      <div class="metric-sub" id="mRealTrades">—</div>
+    </div>
+  </div>
+
+  <!-- ── Current Position ────────────────────────────── -->
+  <div class="position-card">
+    <span class="label">Current Position</span>
+    <div id="positionContent">
+      <div class="no-pos">No open position</div>
+    </div>
+  </div>
+
+  <!-- ── Performance ─────────────────────────────────── -->
+  <div class="perf-grid">
+    <div class="perf-cell">
+      <span class="metric-label">Closing Trades</span>
+      <div class="metric-value" id="pTrades">—</div>
+    </div>
+    <div class="perf-cell">
+      <span class="metric-label">Win Rate</span>
+      <div class="metric-value" id="pWinRate">—</div>
+    </div>
+    <div class="perf-cell">
+      <span class="metric-label">Avg Win</span>
+      <div class="metric-value profit" id="pAvgWin">—</div>
+    </div>
+    <div class="perf-cell">
+      <span class="metric-label">Avg Loss</span>
+      <div class="metric-value loss" id="pAvgLoss">—</div>
+    </div>
+  </div>
+
+  <!-- ── Open Orders ──────────────────────────────────── -->
+  <div class="table-card">
+    <div class="table-head">
+      <span class="label">Open Orders</span>
+      <span class="table-head-right" id="ordersCount">—</span>
+    </div>
+    <table>
+      <thead>
+        <tr>
+          <th>Time</th>
+          <th>Side</th>
+          <th>Type</th>
+          <th>Price</th>
+          <th>Qty</th>
+          <th>Reduce Only</th>
+          <th>Age</th>
+        </tr>
+      </thead>
+      <tbody id="ordersBody">
+        <tr class="empty-row"><td colspan="7">No open orders</td></tr>
+      </tbody>
+    </table>
+  </div>
+
+  <!-- ── Trade History ────────────────────────────────── -->
+  <div class="table-card">
+    <div class="table-head">
+      <span class="label">Trade History</span>
+      <span class="table-head-right">Last 100 fills</span>
+    </div>
+    <table>
+      <thead>
+        <tr>
+          <th>Time</th>
+          <th>Side</th>
+          <th>Fill Price</th>
+          <th>Quantity</th>
+          <th>Realised P&L</th>
+          <th>Commission</th>
+        </tr>
+      </thead>
+      <tbody id="tradesBody">
+        <tr class="empty-row"><td colspan="6">No trade history</td></tr>
+      </tbody>
+    </table>
+  </div>
+
+  <!-- ── Income History ───────────────────────────────── -->
+  <div class="table-card">
+    <div class="table-head">
+      <span class="label">Income · Realised PnL Events</span>
+      <span class="table-head-right">Last 7 days</span>
+    </div>
+    <table>
+      <thead>
+        <tr>
+          <th>Time</th>
+          <th>Income (USDC)</th>
+          <th>Type</th>
+          <th>Transaction ID</th>
+        </tr>
+      </thead>
+      <tbody id="incomeBody">
+        <tr class="empty-row"><td colspan="4">No income records</td></tr>
+      </tbody>
+    </table>
+  </div>
+
+  <!-- ── Footer ───────────────────────────────────────── -->
+  <footer>
+    <span>Vegas-SAR Scalper v2</span>
+    <span>Not financial advice</span>
+  </footer>
+
+</main>
+
+<!-- ═══ SCRIPT ══════════════════════════════════════════ -->
+<script>
+'use strict';
+
+// ── Config ────────────────────────────────────────────────────────────
+const SYMBOL           = 'SOLUSDC';
+const REFRESH_MS       = 30_000;
+const COUNTDOWN_TICK   = 1_000;
+
+let currentMode    = localStorage.getItem('aura_mode') || 'testnet';
+let refreshTimer   = null;
+let countdownTimer = null;
+let secondsLeft    = REFRESH_MS / 1000;
+let isLoading      = false;
+
+// ── Mode toggle ───────────────────────────────────────────────────────
+function setMode(mode) {
+  currentMode = mode;
+  localStorage.setItem('aura_mode', mode);
+  document.getElementById('btnTestnet').classList.toggle('active', mode === 'testnet');
+  document.getElementById('btnLive').classList.toggle('active', mode === 'live');
+  secondsLeft = REFRESH_MS / 1000;
+  load();
+}
+
+// Init mode UI
+document.getElementById('btnTestnet').classList.toggle('active', currentMode === 'testnet');
+document.getElementById('btnLive').classList.toggle('active', currentMode === 'live');
+
+// ── API helper ────────────────────────────────────────────────────────
+async function api(path, extra = {}) {
+  const qs  = new URLSearchParams({ mode: currentMode, path, ...extra });
+  const res = await fetch(`/.netlify/functions/binance?${qs}`);
+  const d   = await res.json();
+  if (!res.ok) throw new Error(d.error || `HTTP ${res.status}`);
+  return d;
+}
+
+// ── Formatting ────────────────────────────────────────────────────────
+function f(n, dp = 2) {
+  const v = parseFloat(n);
+  if (isNaN(v)) return '—';
+  return v.toLocaleString('en-US', { minimumFractionDigits: dp, maximumFractionDigits: dp });
+}
+function fp(n, dp = 2) {
+  const v = parseFloat(n);
+  if (isNaN(v)) return '—';
+  return (v >= 0 ? '+' : '') + f(v, dp);
+}
+function fAge(ms) {
+  const s = Math.floor(ms / 1000);
+  if (s < 60) return `${s}s`;
+  const m = Math.floor(s / 60);
+  if (m < 60) return `${m}m`;
+  const h = Math.floor(m / 60);
+  return `${h}h ${m % 60}m`;
+}
+function fTime(ts) {
+  const d = new Date(ts);
+  return d.toLocaleDateString('en-GB', { day: '2-digit', month: 'short' })
+    + ' ' + d.toTimeString().slice(0, 5);
+}
+
+// ── Status indicator ──────────────────────────────────────────────────
+function setStatus(state, text) {
+  const dot = document.getElementById('statusDot');
+  dot.className = 'dot ' + state;
+  document.getElementById('statusText').textContent = text;
+}
+
+// ── Error banner ──────────────────────────────────────────────────────
+function showError(msg) {
+  const el = document.getElementById('errorBanner');
+  el.textContent = msg;
+  el.classList.add('show');
+}
+function clearError() {
+  document.getElementById('errorBanner').classList.remove('show');
+}
+
+// ── Render: balance ───────────────────────────────────────────────────
+function renderBalance(balances) {
+  const usdc = Array.isArray(balances)
+    ? balances.find(b => b.asset === 'USDC' || b.asset === 'usdc')
+    : null;
+  if (!usdc) return;
+  const val = parseFloat(usdc.availableBalance);
+  document.getElementById('mBalance').textContent = f(val);
+}
+
+// ── Render: position ──────────────────────────────────────────────────
+function renderPosition(positions) {
+  const pos = Array.isArray(positions)
+    ? positions.find(p => p.symbol === SYMBOL && parseFloat(p.positionAmt) !== 0)
+    : null;
+
+  const pnlEl    = document.getElementById('mUnrealPnl');
+  const roiEl    = document.getElementById('mUnrealRoi');
+  const content  = document.getElementById('positionContent');
+
+  if (!pos) {
+    pnlEl.textContent = '—';
+    pnlEl.className   = 'metric-value';
+    roiEl.textContent = '—';
+    content.innerHTML = '<div class="no-pos">No open position</div>';
+    return;
+  }
+
+  const amt      = parseFloat(pos.positionAmt);
+  const dir      = amt > 0 ? 'long' : 'short';
+  const dirLabel = dir === 'long' ? 'Long ↑' : 'Short ↓';
+  const entry    = parseFloat(pos.entryPrice);
+  const mark     = parseFloat(pos.markPrice);
+  const liq      = parseFloat(pos.liquidationPrice);
+  const pnl      = parseFloat(pos.unRealizedProfit);
+  const margin   = parseFloat(pos.isolatedMargin) || (Math.abs(amt) * entry / 20);
+  const notional = Math.abs(amt) * mark;
+  const roi      = margin > 0 ? (pnl / margin) * 100 : 0;
+  const pnlClass = pnl >= 0 ? 'profit' : 'loss';
+  const age      = pos.updateTime ? Date.now() - pos.updateTime : null;
+
+  // Metric strip update
+  pnlEl.textContent = fp(pnl) + ' USDC';
+  pnlEl.className   = `metric-value ${pnlClass}`;
+  roiEl.textContent = `${fp(roi)}% on margin`;
+
+  content.innerHTML = `
+    <div class="position-top">
+      <div class="pos-dir ${dir}">${dirLabel}</div>
+      <div class="pos-pnl-block">
+        <div class="pos-pnl-usdc ${pnlClass}">${fp(pnl)} USDC</div>
+        <div class="pos-pnl-roi">${fp(roi)}% on margin</div>
+      </div>
+    </div>
+
+    <div class="pos-grid">
+      <div class="pos-field">
+        <span class="pos-field-label">Entry Price</span>
+        <span class="pos-field-value">$${f(entry, 4)}</span>
+      </div>
+      <div class="pos-field">
+        <span class="pos-field-label">Mark Price</span>
+        <span class="pos-field-value">$${f(mark, 4)}</span>
+      </div>
+      <div class="pos-field">
+        <span class="pos-field-label">Liquidation</span>
+        <span class="pos-field-value danger">$${f(liq, 4)}</span>
+      </div>
+      <div class="pos-field">
+        <span class="pos-field-label">Age</span>
+        <span class="pos-field-value">${age !== null ? fAge(age) : '—'}</span>
+      </div>
+    </div>
+    <div class="pos-grid">
+      <div class="pos-field">
+        <span class="pos-field-label">Size</span>
+        <span class="pos-field-value">${f(Math.abs(amt), 3)} SOL</span>
+      </div>
+      <div class="pos-field">
+        <span class="pos-field-label">Notional</span>
+        <span class="pos-field-value">$${f(notional)}</span>
+      </div>
+      <div class="pos-field">
+        <span class="pos-field-label">Margin</span>
+        <span class="pos-field-value">$${f(margin)}</span>
+      </div>
+      <div class="pos-field">
+        <span class="pos-field-label">Leverage</span>
+        <span class="pos-field-value">20×</span>
+      </div>
+    </div>
+  `;
+}
+
+// ── Render: open orders ───────────────────────────────────────────────
+function renderOrders(orders) {
+  const body    = document.getElementById('ordersBody');
+  const countEl = document.getElementById('ordersCount');
+  const sym     = Array.isArray(orders) ? orders.filter(o => o.symbol === SYMBOL) : [];
+
+  countEl.textContent = sym.length ? `${sym.length} order${sym.length !== 1 ? 's' : ''}` : '0 orders';
+
+  if (!sym.length) {
+    body.innerHTML = '<tr class="empty-row"><td colspan="7">No open orders</td></tr>';
+    return;
+  }
+
+  body.innerHTML = [...sym]
+    .sort((a, b) => b.time - a.time)
+    .map(o => {
+      const side    = o.side.toLowerCase();
+      const price   = parseFloat(o.price);
+      const qty     = parseFloat(o.origQty);
+      return `<tr>
+        <td>${fTime(o.time)}</td>
+        <td><span class="badge badge-${side}">${o.side}</span></td>
+        <td>${o.type}</td>
+        <td>$${f(price, 4)}</td>
+        <td>${f(qty, 3)}</td>
+        <td>${o.reduceOnly ? 'Yes' : 'No'}</td>
+        <td>${fAge(Date.now() - o.time)}</td>
+      </tr>`;
+    }).join('');
+}
+
+// ── Render: trade fills ───────────────────────────────────────────────
+function renderTrades(trades) {
+  const body = document.getElementById('tradesBody');
+  if (!Array.isArray(trades) || !trades.length) {
+    body.innerHTML = '<tr class="empty-row"><td colspan="6">No trade history</td></tr>';
+    return;
+  }
+
+  const sorted = [...trades].sort((a, b) => b.time - a.time);
+
+  body.innerHTML = sorted.map(t => {
+    const pnl     = parseFloat(t.realizedPnl);
+    const fee     = parseFloat(t.commission);
+    const pnlCls  = pnl > 0 ? 'profit' : pnl < 0 ? 'loss' : '';
+    const pnlStr  = pnl !== 0 ? fp(pnl) : '—';
+    const side    = t.side.toLowerCase();
+    return `<tr>
+      <td>${fTime(t.time)}</td>
+      <td><span class="badge badge-${side}">${t.side}</span></td>
+      <td>$${f(parseFloat(t.price), 4)}</td>
+      <td>${f(parseFloat(t.qty), 3)}</td>
+      <td class="${pnlCls}">${pnlStr}</td>
+      <td>${f(fee, 5)}</td>
+    </tr>`;
+  }).join('');
+
+  // Performance stats — from closing fills (realizedPnl ≠ 0)
+  const closing = trades.filter(t => parseFloat(t.realizedPnl) !== 0);
+  const wins    = closing.filter(t => parseFloat(t.realizedPnl) > 0);
+  const losses  = closing.filter(t => parseFloat(t.realizedPnl) < 0);
+
+  document.getElementById('pTrades').textContent  = closing.length || '—';
+  document.getElementById('pWinRate').textContent  = closing.length
+    ? (wins.length / closing.length * 100).toFixed(1) + '%'
+    : '—';
+  document.getElementById('pAvgWin').textContent   = wins.length
+    ? '+' + f(wins.reduce((s, t) => s + parseFloat(t.realizedPnl), 0) / wins.length)
+    : '—';
+  document.getElementById('pAvgLoss').textContent  = losses.length
+    ? f(losses.reduce((s, t) => s + parseFloat(t.realizedPnl), 0) / losses.length)
+    : '—';
+}
+
+// ── Render: income (realised PnL events) ─────────────────────────────
+function renderIncome(income) {
+  const body = document.getElementById('incomeBody');
+  const realEl = document.getElementById('mRealPnl');
+  const tradesEl = document.getElementById('mRealTrades');
+
+  if (!Array.isArray(income) || !income.length) {
+    body.innerHTML = '<tr class="empty-row"><td colspan="4">No income records for the past 7 days</td></tr>';
+    realEl.textContent   = '0.00';
+    realEl.className     = 'metric-value';
+    tradesEl.textContent = '0 events';
+    return;
+  }
+
+  const total    = income.reduce((s, i) => s + parseFloat(i.income), 0);
+  realEl.textContent   = fp(total) + ' USDC';
+  realEl.className     = `metric-value ${total >= 0 ? 'profit' : 'loss'}`;
+  tradesEl.textContent = `${income.length} event${income.length !== 1 ? 's' : ''}`;
+
+  const sorted = [...income].sort((a, b) => b.time - a.time);
+  body.innerHTML = sorted.map(i => {
+    const v      = parseFloat(i.income);
+    const cls    = v > 0 ? 'profit' : v < 0 ? 'loss' : '';
+    const tranId = i.tranId?.toString()?.slice(-8) ?? '—';
+    return `<tr>
+      <td>${fTime(i.time)}</td>
+      <td class="${cls}">${fp(v)} USDC</td>
+      <td>${i.incomeType}</td>
+      <td style="color:var(--text-light)">···${tranId}</td>
+    </tr>`;
+  }).join('');
+}
+
+// ── Main data load ────────────────────────────────────────────────────
+async function load() {
+  if (isLoading) return;
+  isLoading = true;
+  clearError();
+  setStatus('loading', 'Updating…');
+
+  try {
+    const sevenDaysAgo = (Date.now() - 7 * 24 * 60 * 60 * 1000).toString();
+
+    const [balances, positions, orders, trades, income] = await Promise.all([
+      api('/fapi/v2/balance'),
+      api('/fapi/v2/positionRisk', { symbol: SYMBOL }),
+      api('/fapi/v1/openOrders', { symbol: SYMBOL }),
+      api('/fapi/v1/userTrades', { symbol: SYMBOL, limit: '100' }),
+      api('/fapi/v1/income', {
+        symbol:     SYMBOL,
+        incomeType: 'REALIZED_PNL',
+        startTime:  sevenDaysAgo,
+        limit:      '100',
+      }),
+    ]);
+
+    renderBalance(balances);
+    renderPosition(positions);
+    renderOrders(orders);
+    renderTrades(trades);
+    renderIncome(income);
+
+    const now = new Date();
+    setStatus('live', `Updated ${now.toTimeString().slice(0, 8)}`);
+    secondsLeft = REFRESH_MS / 1000;
+    startCountdown();
+
+  } catch (err) {
+    showError(`Data error: ${err.message}`);
+    setStatus('error', 'Failed to load');
+    console.error(err);
+  } finally {
+    isLoading = false;
+  }
+}
+
+// ── Countdown to next refresh ─────────────────────────────────────────
+function startCountdown() {
+  clearInterval(countdownTimer);
+  countdownTimer = setInterval(() => {
+    secondsLeft--;
+    if (secondsLeft <= 0) {
+      clearInterval(countdownTimer);
+    } else {
+      const el = document.getElementById('statusText');
+      if (el) el.textContent = `Next in ${secondsLeft}s`;
+    }
+  }, COUNTDOWN_TICK);
+}
+
+// ── Auto-refresh ──────────────────────────────────────────────────────
+function startAutoRefresh() {
+  clearInterval(refreshTimer);
+  refreshTimer = setInterval(load, REFRESH_MS);
+}
+
+// ── Boot ──────────────────────────────────────────────────────────────
+load();
+startAutoRefresh();
+</script>
+</body>
+</html>
