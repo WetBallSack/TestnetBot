@@ -627,7 +627,7 @@ document.getElementById('btnLive').classList.toggle('active', currentMode === 'l
 // ── API helper ────────────────────────────────────────────────────────
 async function api(path, extra = {}) {
   const qs  = new URLSearchParams({ mode: currentMode, path, ...extra });
-  const res = await fetch(`/.netlify/functions/binance?${qs}`);
+  const res = await fetch(`/api/binance?${qs}`);
   const d   = await res.json();
   if (!res.ok) throw new Error(d.error || `HTTP ${res.status}`);
   return d;
