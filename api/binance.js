@@ -39,9 +39,7 @@ module.exports = async function handler(req, res) {
     recvWindow: '6000',
   };
 
-  const queryString = Object.entries(params)
-    .map(([k, v]) => `${encodeURIComponent(k)}=${encodeURIComponent(v)}`)
-    .join('&');
+  const queryString = new URLSearchParams(params).toString();
 
   const signature = crypto
     .createHmac('sha256', secret)
