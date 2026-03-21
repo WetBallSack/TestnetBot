@@ -547,21 +547,21 @@
   <div class="table-card">
     <div class="table-head">
       <span class="label">Trade History</span>
-      <span class="table-head-right">Last 100 fills</span>
+      <span class="table-head-right">Last 100 fills · grouped by order</span>
     </div>
     <table>
       <thead>
         <tr>
           <th>Time</th>
           <th>Side</th>
-          <th>Fill Price</th>
-          <th>Quantity</th>
+          <th>Avg Price</th>
+          <th>Total Qty</th>
           <th>Realised P&L</th>
-          <th>Commission</th>
+          <th>Fills</th>
         </tr>
       </thead>
       <tbody id="tradesBody">
-        <tr class="empty-row"><td colspan="6">No trade history</td></tr>
+        <tr class="empty-row"><td colspan="5">No trade history</td></tr>
       </tbody>
     </table>
   </div>
@@ -804,42 +804,69 @@ function renderOrders(orders) {
 function renderTrades(trades) {
   const body = document.getElementById('tradesBody');
   if (!Array.isArray(trades) || !trades.length) {
-    body.innerHTML = '<tr class="empty-row"><td colspan="6">No trade history</td></tr>';
+    body.innerHTML = '<tr class="empty-row"><td colspan="5">No trade history</td></tr>';
     return;
   }
 
-  const sorted = [...trades].sort((a, b) => b.time - a.time);
+  // Group partial fills by orderId — Binance returns one row per partial fill,
+  // which floods the table when one MARKET order fills in many small lots.
+  // We aggregate: latest timestamp, weighted avg price, summed qty, summed realizedPnl.
+  const orderMap = new Map();
+  for (const t of trades) {
+    const key = t.orderId;
+    if (!orderMap.has(key)) {
+      orderMap.set(key, {
+        orderId:     key,
+        time:        t.time,
+        side:        t.side,
+        totalQty:    0,
+        totalValue:  0,   // sum of price × qty for weighted avg
+        totalPnl:    0,
+        fills:       0,
+      });
+    }
+    const o = orderMap.get(key);
+    const qty   = parseFloat(t.qty);
+    const price = parseFloat(t.price);
+    o.totalQty   += qty;
+    o.totalValue += price * qty;
+    o.totalPnl   += parseFloat(t.realizedPnl);
+    o.fills      += 1;
+    if (t.time > o.time) o.time = t.time;   // use latest fill time
+  }
 
-  body.innerHTML = sorted.map(t => {
-    const pnl     = parseFloat(t.realizedPnl);
-    const fee     = parseFloat(t.commission);
-    const pnlCls  = pnl > 0 ? 'profit' : pnl < 0 ? 'loss' : '';
-    const pnlStr  = pnl !== 0 ? fp(pnl) : '—';
-    const side    = t.side.toLowerCase();
+  const orders = [...orderMap.values()].sort((a, b) => b.time - a.time);
+
+  body.innerHTML = orders.map(o => {
+    const avgPrice = o.totalQty > 0 ? o.totalValue / o.totalQty : 0;
+    const pnlCls   = o.totalPnl > 0 ? 'profit' : o.totalPnl < 0 ? 'loss' : '';
+    const pnlStr   = o.totalPnl !== 0 ? fp(o.totalPnl) : '—';
+    const side     = o.side.toLowerCase();
+    const fillsStr = o.fills > 1 ? `${o.fills} fills` : '1 fill';
     return `<tr>
-      <td>${fTime(t.time)}</td>
-      <td><span class="badge badge-${side}">${t.side}</span></td>
-      <td>$${f(parseFloat(t.price), 4)}</td>
-      <td>${f(parseFloat(t.qty), 3)}</td>
+      <td>${fTime(o.time)}</td>
+      <td><span class="badge badge-${side}">${o.side}</span></td>
+      <td>$${f(avgPrice, 4)}</td>
+      <td>${f(o.totalQty, 3)}</td>
       <td class="${pnlCls}">${pnlStr}</td>
-      <td>${f(fee, 5)}</td>
+      <td style="color:var(--text-light)">${fillsStr}</td>
     </tr>`;
   }).join('');
 
-  // Performance stats — from closing fills (realizedPnl ≠ 0)
-  const closing = trades.filter(t => parseFloat(t.realizedPnl) !== 0);
-  const wins    = closing.filter(t => parseFloat(t.realizedPnl) > 0);
-  const losses  = closing.filter(t => parseFloat(t.realizedPnl) < 0);
+  // Performance stats — from closing orders (realizedPnl ≠ 0), grouped
+  const closing = orders.filter(o => o.totalPnl !== 0);
+  const wins    = closing.filter(o => o.totalPnl > 0);
+  const losses  = closing.filter(o => o.totalPnl < 0);
 
   document.getElementById('pTrades').textContent  = closing.length || '—';
   document.getElementById('pWinRate').textContent  = closing.length
     ? (wins.length / closing.length * 100).toFixed(1) + '%'
     : '—';
   document.getElementById('pAvgWin').textContent   = wins.length
-    ? '+' + f(wins.reduce((s, t) => s + parseFloat(t.realizedPnl), 0) / wins.length)
+    ? '+' + f(wins.reduce((s, o) => s + o.totalPnl, 0) / wins.length)
     : '—';
   document.getElementById('pAvgLoss').textContent  = losses.length
-    ? f(losses.reduce((s, t) => s + parseFloat(t.realizedPnl), 0) / losses.length)
+    ? f(losses.reduce((s, o) => s + o.totalPnl, 0) / losses.length)
     : '—';
 }
 
