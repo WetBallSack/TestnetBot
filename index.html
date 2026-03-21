@@ -884,21 +884,43 @@ function renderIncome(income) {
     return;
   }
 
-  const total    = income.reduce((s, i) => s + parseFloat(i.income), 0);
+  const total = income.reduce((s, i) => s + parseFloat(i.income), 0);
   realEl.textContent   = fp(total) + ' USDC';
   realEl.className     = `metric-value ${total >= 0 ? 'profit' : 'loss'}`;
-  tradesEl.textContent = `${income.length} event${income.length !== 1 ? 's' : ''}`;
 
-  const sorted = [...income].sort((a, b) => b.time - a.time);
-  body.innerHTML = sorted.map(i => {
-    const v      = parseFloat(i.income);
-    const cls    = v > 0 ? 'profit' : v < 0 ? 'loss' : '';
-    const tranId = i.tranId?.toString()?.slice(-8) ?? '—';
+  // Group per-fill income events by minute bucket — Binance returns one
+  // REALIZED_PNL event per partial fill, so one trade can produce 20+ rows.
+  // Bucketing by floor(time / 60000) collapses all fills from the same order
+  // into a single row with the summed PnL.
+  const bucketMap = new Map();
+  for (const i of income) {
+    const bucket = Math.floor(i.time / 60000);  // 1-minute buckets
+    if (!bucketMap.has(bucket)) {
+      bucketMap.set(bucket, {
+        time:       i.time,
+        total:      0,
+        incomeType: i.incomeType,
+        fills:      0,
+        tranId:     i.tranId?.toString()?.slice(-8) ?? '—',
+      });
+    }
+    const b = bucketMap.get(bucket);
+    b.total += parseFloat(i.income);
+    b.fills += 1;
+    if (i.time > b.time) b.time = i.time;
+  }
+
+  const grouped = [...bucketMap.values()].sort((a, b) => b.time - a.time);
+  tradesEl.textContent = `${grouped.length} trade${grouped.length !== 1 ? 's' : ''}`;
+
+  body.innerHTML = grouped.map(b => {
+    const cls      = b.total > 0 ? 'profit' : b.total < 0 ? 'loss' : '';
+    const fillsStr = b.fills > 1 ? `${b.fills} fills` : '1 fill';
     return `<tr>
-      <td>${fTime(i.time)}</td>
-      <td class="${cls}">${fp(v)} USDC</td>
-      <td>${i.incomeType}</td>
-      <td style="color:var(--text-light)">···${tranId}</td>
+      <td>${fTime(b.time)}</td>
+      <td class="${cls}">${fp(b.total)} USDC</td>
+      <td>${b.incomeType}</td>
+      <td style="color:var(--text-light)">${fillsStr}</td>
     </tr>`;
   }).join('');
 }
